@@ -59,7 +59,7 @@ app.get('/snapshot/costlines', async (req, res) => {
     // ── 1. Fetch PMBudget (budget fields) ──────────────────────────────
     const budgetRes = await fetch(
       `${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/PMBudget` +
-      `?$filter=ProjectID eq '${projectId}'` +
+      `?$filter=ProjectID eq '${projectId}' and Type eq 'Expense'` +
       `&$select=ProjectTask,CostCode,Description,OriginalBudgetedAmount,RevisedBudgetedAmount,PotentialRevisedAmount`,
       {
   headers: {
