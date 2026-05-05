@@ -127,6 +127,12 @@ app.get('/snapshot/costlines', async (req, res) => {
       const amount = parseFloat(row.Amount) || 0;
       const fp     = row.FinPeriod; // MMYYYY
 
+      // temporary log add
+      if (row.CostCode.trim() === 'L1510') {
+  console.log('L1510 row:', JSON.stringify({ key, amount, fp: row.FinPeriod }));
+}
+// end of temporary log add
+      
       // Actual
       actualMap.set(key, (actualMap.get(key) || 0) + amount);
 
