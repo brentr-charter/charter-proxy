@@ -152,6 +152,9 @@ app.get('/snapshot/costlines', async (req, res) => {
       const amount = parseFloat(row.Amount) || 0;
       const fp     = row.FinPeriod; // MMYYYY
 
+      if (row.CostCode.trim() === 'L1510' && row.ProjectTask.trim() === 'GC') {
+  console.log('MATCH:', row.FinPeriod, row.Amount);
+}
       // temporary log add
       if (row.CostCode.trim() === 'L1510') {
   console.log('L1510 row:', JSON.stringify({ key, amount, fp: row.FinPeriod }));
@@ -172,10 +175,6 @@ app.get('/snapshot/costlines', async (req, res) => {
     for (const [key, budget] of budgetMap) {
       const actual   = actualMap.get(key) || 0;
       const buckets  = periodMap.get(key) || new Map();
-
-      if (row.CostCode.trim() === 'L1510' && row.ProjectTask.trim() === 'GC') {
-  console.log('MATCH:', row.FinPeriod, row.Amount);
-}
 
       // Sort periods descending, take 3 most recent, then reverse to oldest-first
       const history = [...buckets.entries()]
