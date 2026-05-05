@@ -74,7 +74,7 @@ app.get('/snapshot/costlines', async (req, res) => {
     // Group and sum by Task|CostCode
     const budgetMap = new Map();
     for (const row of budgetData.value) {
-      const key = `${row.ProjectTask}|${row.CostCode}`;
+      const key = `${row.ProjectTask.trim()}|${row.CostCode.trim()}`;
       const existing = budgetMap.get(key);
       const original  = parseFloat(row.OriginalBudgetedAmount)  || 0;
       const revised   = parseFloat(row.RevisedBudgetedAmount)   || 0;
@@ -150,8 +150,8 @@ app.get('/snapshot/costlines', async (req, res) => {
         }));
 
       costLines.push({
-        id:             `${projectId}|${budget.task}|${budget.costCode}`,
-        task:           budget.task,
+        id:             `${projectId}|${budget.task.trim()}|${budget.costCode.trim()}`,
+        task:           budget.task.trim(),
         costCode:       budget.costCode,
         description:    budget.description,
         originalBudget: Math.round(budget.originalBudget),
