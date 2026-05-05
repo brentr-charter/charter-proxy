@@ -50,7 +50,7 @@ app.get('/debug/transactions', async (req, res) => {
   const toYYYYMM = (s) => s.slice(2) + s.slice(0, 2);
   const auth = { 'Authorization': 'Basic ' + Buffer.from(user + ':' + pass).toString('base64'), 'Accept': 'application/json' };
 
-  const txRes = await fetch(`${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry?$filter=ProjectID eq '${projectId}'&$select=ProjectTask,CostCode,Amount,FinPeriod`, { headers: auth });
+  const txRes = await fetch(`${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry?$filter=ProjectID eq '${projectId}'&$select=ProjectID,ProjectTask,CostCode,Amount,FinPeriod`, { headers: auth });
   const txData = await txRes.json();
 
 const rows = txData.value.map(r => ({
@@ -167,7 +167,7 @@ app.get('/snapshot/costlines', async (req, res) => {
     const txRes = await fetch(
       `${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry` +
       `?$filter=ProjectID eq '${projectId}'` +
-      `&$select=ProjectTask,CostCode,Amount,FinPeriod`,
+      `&$select=ProjectID,ProjectTask,CostCode,Amount,FinPeriod`,
       {
   headers: {
     'Authorization': `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`,
