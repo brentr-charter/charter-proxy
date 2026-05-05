@@ -53,30 +53,31 @@ app.get('/debug/transactions', async (req, res) => {
   const txRes = await fetch(`${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry?$filter=Project eq '${projectId}'&$select=ProjectTask,CostCode,Amount,FinPeriod`, { headers: auth });
   const txData = await txRes.json();
 
-  const rows = txData.value.map(r => ({
-    task:       r.ProjectTask.trim(),
-    costCode:   r.CostCode.trim(),
-    amount:     r.Amount,
-    finPeriod:  r.FinPeriod,
-    converted:  toYYYYMM(r.FinPeriod),
-    threshold:  toYYYYMM(finPeriod),
-    kept:       toYYYYMM(r.FinPeriod) <= toYYYYMM(finPeriod),
+const rows = txData.value.map(r => ({
+    task:      r.ProjectTask.trim(),
+    costCode:  r.CostCode.trim(),
+    amount:    r.Amount,
+    finPeriod: r.FinPeriod,
+    converted: toYYYYMM(r.FinPeriod),
+    threshold: toYYYYMM(finPeriod),
+    kept:      toYYYYMM(r.FinPeriod) <= toYYYYMM(finPeriod),
   }));
 
-  const dropped = rows.filter(r => !r.kept);
-  const kept    = rows.filter(r => r.kept);
-  const l1510   = rows.filter(r => r.costCode === 'L1510' && r.task === 'GC');
-
-  const uniqueProjects = [...new Set(txData.value.map(r => r.Project))];
+  const dropped         = rows.filter(r => !r.kept);
+  const kept            = rows.filter(r => r.kept);
+  const l1510           = rows.filter(r => r.costCode === 'L1510' && r.task === 'GC');
+  const uniqueProjects  = [...new Set(txData.value.map(r => r.Project))];
   const uniqueCostCodes = [...new Set(txData.value.map(r => r.CostCode.trim()))].sort();
 
-res.json({
-  totalRows,
-  keptRows: kept.length,
-  droppedRows: dropped.length,
-  l1510GcRows: l1510,
-  uniqueProjects,
-  uniqueCostCodes,});
+  res.json({
+    totalRows:     rows.length,
+    keptRows:      kept.length,
+    droppedRows:   dropped.length,
+    l1510GcRows:   l1510,
+    droppedSample: dropped.slice(0, 3),
+    uniqueProjects,
+    uniqueCostCodes,
+  });
 });
 
 app.get('/debug/join', async (req, res) => {
