@@ -46,31 +46,24 @@ app.get('/debug/join', async (req, res) => {
   const { projectId, period, task, costCode } = req.query;
   const user = req.headers['x-acumatica-user'];
   const pass = req.headers['x-acumatica-pass'];
-  const finPeriod = period.replace('-', '');
   const auth = { 'Authorization': 'Basic ' + Buffer.from(user + ':' + pass).toString('base64'), 'Accept': 'application/json' };
 
-  const txRes = await fetch(`${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry?$filter=Project eq '${projectId}'&$select=ProjectTask,CostCode,FinPeriod`, { headers: auth });
+  const txRes = await fetch(`${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry?$filter=Project eq '${projectId}'&$select=ProjectTask,CostCode`, { headers: auth });
   const txData = await txRes.json();
-  const toYYYYMM = (s) => s.slice(2) + s.slice(0, 2);
-
-  // Find raw rows for this task/costcode before any trimming
-  const rawMatches = txData.value.filter(r =>
-    r.ProjectTask.trim() === task && r.CostCode.trim() === costCode
-  );
-
-  // Show char codes for first budget key and first tx key
-  const budgetRes = await fetch(`${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/PMBudget?$filter=ProjectID eq '${projectId}' and Type eq 'Expense'&$select=ProjectTask,CostCode`, { headers: auth });
-  const budgetData = await budgetRes.json();
-  const budgetRow = budgetData.value.find(r => r.ProjectTask.trim() === task && r.CostCode.trim() === costCode);
 
   const charCodes = (s) => [...s].map(c => c.charCodeAt(0));
 
+  // Unique trimmed task values and their char codes
+  const uniqueTasks = [...new Set(txData.value.map(r => r.ProjectTask))];
+  const gcRows = txData.value.filter(r => r.ProjectTask.includes('GC'));
+  const l1510Rows = txData.value.filter(r => r.CostCode.includes('L1510'));
+
   res.json({
-    budgetRaw:    budgetRow ? { task: budgetRow.ProjectTask, costCode: budgetRow.CostCode } : null,
-    budgetChars:  budgetRow ? { task: charCodes(budgetRow.ProjectTask), costCode: charCodes(budgetRow.CostCode) } : null,
-    txRawSample:  rawMatches[0] ? { task: rawMatches[0].ProjectTask, costCode: rawMatches[0].CostCode } : null,
-    txChars:      rawMatches[0] ? { task: charCodes(rawMatches[0].ProjectTask), costCode: charCodes(rawMatches[0].CostCode) } : null,
-    rawMatchCount: rawMatches.length,
+    uniqueTasksSample: uniqueTasks.slice(0, 5).map(t => ({ raw: t, trimmed: t.trim(), chars: charCodes(t.trim()) })),
+    gcRowCount: gcRows.length,
+    gcSample: gcRows[0] ? { task: gcRows[0].ProjectTask, chars: charCodes(gcRows[0].ProjectTask.trim()) } : null,
+    l1510RowCount: l1510Rows.length,
+    l1510Sample: l1510Rows[0] ? { costCode: l1510Rows[0].CostCode, chars: charCodes(l1510Rows[0].CostCode.trim()) } : null,
   });
 });
 
