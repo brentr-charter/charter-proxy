@@ -86,7 +86,7 @@ app.get('/snapshot/costlines', async (req, res) => {
       } else {
         budgetMap.set(key, {
           task:           row.ProjectTask,
-          costCode:       row.CostCode,
+          costCode:       row.CostCode.trim(),
           description:    row.Description,
           originalBudget: original,
           revisedBudget:  revised,
@@ -154,7 +154,7 @@ app.get('/snapshot/costlines', async (req, res) => {
       costLines.push({
         id:             `${projectId}|${budget.task.trim()}|${budget.costCode.trim()}`,
         task:           budget.task.trim(),
-        costCode:       budget.costCode,
+        costCode:       budget.costCode.trim(),
         description:    budget.description,
         originalBudget: Math.round(budget.originalBudget),
         revisedBudget:  Math.round(budget.revisedBudget),
