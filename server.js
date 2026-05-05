@@ -103,7 +103,7 @@ app.get('/snapshot/costlines', async (req, res) => {
     // ── 2. Fetch Transactions (actual + history) ───────────────────────
     const txRes = await fetch(
       `${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry` +
-      `?$filter=Project eq '${projectId}' and FinPeriod le '${finPeriod}'` +
+      `?$filter=Project eq '${projectId}'` +
       `&$select=ProjectTask,CostCode,Amount,FinPeriod`,
       {
   headers: {
@@ -120,7 +120,9 @@ app.get('/snapshot/costlines', async (req, res) => {
     const periodMap  = new Map(); // key -> { period -> amount }
 
     for (const row of txData.value) {
-      const key    = `${row.ProjectTask}|${row.CostCode}`;
+      if (row.FinPeriod > finPeriod) continue; // skip future periods
+  
+      const key    = `${row.ProjectTask.trim()}|${row.CostCode.trim()}`;
       const amount = parseFloat(row.Amount) || 0;
       const fp     = row.FinPeriod; // MMYYYY
 
