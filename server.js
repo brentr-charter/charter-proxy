@@ -42,6 +42,35 @@ app.get('/odata/:giName', async (req, res) => {
   }
 });
 
+app.get('/debug/join', async (req, res) => {
+  const { projectId, period, task, costCode } = req.query;
+  const user = req.headers['x-acumatica-user'];
+  const pass = req.headers['x-acumatica-pass'];
+  const finPeriod = period.replace('-', '');
+  const auth = { 'Authorization': 'Basic ' + Buffer.from(user + ':' + pass).toString('base64'), 'Accept': 'application/json' };
+
+  const budgetRes = await fetch(`${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/PMBudget?$filter=ProjectID eq '${projectId}' and Type eq 'Expense'&$select=ProjectTask,CostCode`, { headers: auth });
+  const budgetData = await budgetRes.json();
+  const budgetKeys = budgetData.value.map(r => `"${r.ProjectTask.trim()}|${r.CostCode.trim()}"`);
+
+  const txRes = await fetch(`${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry?$filter=Project eq '${projectId}'&$select=ProjectTask,CostCode,AccountGroup,FinPeriod,Amount`, { headers: auth });
+  const txData = await txRes.json();
+  const toYYYYMM = (s) => s.slice(2) + s.slice(0, 2);
+  const txRows = txData.value
+    .filter(r => toYYYYMM(r.FinPeriod) <= toYYYYMM(finPeriod))
+    .map(r => ({ key: `"${r.ProjectTask.trim()}|${r.CostCode.trim()}"`, accountGroup: r.AccountGroup.trim(), finPeriod: r.FinPeriod, amount: r.Amount }));
+
+  const targetBudgetKey = `"${task}|${costCode}"`;
+  const targetTxRows = txRows.filter(r => r.key === targetBudgetKey);
+
+  res.json({
+    targetKey: targetBudgetKey,
+    budgetKeyExists: budgetKeys.includes(targetBudgetKey),
+    matchingTxRows: targetTxRows,
+    totalTxRowsInPeriod: txRows.length,
+  });
+});
+
 app.get('/snapshot/costlines', async (req, res) => {
   const { projectId, period } = req.query;
   const user = req.headers['x-acumatica-user'];
