@@ -42,6 +42,40 @@ app.get('/odata/:giName', async (req, res) => {
   }
 });
 
+app.get('/debug/transactions', async (req, res) => {
+  const { projectId, period } = req.query;
+  const user = req.headers['x-acumatica-user'];
+  const pass = req.headers['x-acumatica-pass'];
+  const finPeriod = period.replace('-', '');
+  const toYYYYMM = (s) => s.slice(2) + s.slice(0, 2);
+  const auth = { 'Authorization': 'Basic ' + Buffer.from(user + ':' + pass).toString('base64'), 'Accept': 'application/json' };
+
+  const txRes = await fetch(`${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry?$filter=Project eq '${projectId}'&$select=ProjectTask,CostCode,Amount,FinPeriod`, { headers: auth });
+  const txData = await txRes.json();
+
+  const rows = txData.value.map(r => ({
+    task:       r.ProjectTask.trim(),
+    costCode:   r.CostCode.trim(),
+    amount:     r.Amount,
+    finPeriod:  r.FinPeriod,
+    converted:  toYYYYMM(r.FinPeriod),
+    threshold:  toYYYYMM(finPeriod),
+    kept:       toYYYYMM(r.FinPeriod) <= toYYYYMM(finPeriod),
+  }));
+
+  const dropped = rows.filter(r => !r.kept);
+  const kept    = rows.filter(r => r.kept);
+  const l1510   = rows.filter(r => r.costCode === 'L1510' && r.task === 'GC');
+
+  res.json({
+    totalRows:    rows.length,
+    keptRows:     kept.length,
+    droppedRows:  dropped.length,
+    l1510GcRows:  l1510,
+    droppedSample: dropped.slice(0, 3),
+  });
+});
+
 app.get('/debug/join', async (req, res) => {
   const { projectId, period, task, costCode } = req.query;
   const user = req.headers['x-acumatica-user'];
