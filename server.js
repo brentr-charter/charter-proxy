@@ -49,25 +49,28 @@ app.get('/debug/join', async (req, res) => {
   const finPeriod = period.replace('-', '');
   const auth = { 'Authorization': 'Basic ' + Buffer.from(user + ':' + pass).toString('base64'), 'Accept': 'application/json' };
 
-  const budgetRes = await fetch(`${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/PMBudget?$filter=ProjectID eq '${projectId}' and Type eq 'Expense'&$select=ProjectTask,CostCode`, { headers: auth });
-  const budgetData = await budgetRes.json();
-  const budgetKeys = budgetData.value.map(r => `"${r.ProjectTask.trim()}|${r.CostCode.trim()}"`);
-
-  const txRes = await fetch(`${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry?$filter=Project eq '${projectId}'&$select=ProjectTask,CostCode,AccountGroup,FinPeriod,Amount`, { headers: auth });
+  const txRes = await fetch(`${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry?$filter=Project eq '${projectId}'&$select=ProjectTask,CostCode,FinPeriod`, { headers: auth });
   const txData = await txRes.json();
   const toYYYYMM = (s) => s.slice(2) + s.slice(0, 2);
-  const txRows = txData.value
-    .filter(r => toYYYYMM(r.FinPeriod) <= toYYYYMM(finPeriod))
-    .map(r => ({ key: `"${r.ProjectTask.trim()}|${r.CostCode.trim()}"`, accountGroup: r.AccountGroup.trim(), finPeriod: r.FinPeriod, amount: r.Amount }));
 
-  const targetBudgetKey = `"${task}|${costCode}"`;
-  const targetTxRows = txRows.filter(r => r.key === targetBudgetKey);
+  // Find raw rows for this task/costcode before any trimming
+  const rawMatches = txData.value.filter(r =>
+    r.ProjectTask.trim() === task && r.CostCode.trim() === costCode
+  );
+
+  // Show char codes for first budget key and first tx key
+  const budgetRes = await fetch(`${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/PMBudget?$filter=ProjectID eq '${projectId}' and Type eq 'Expense'&$select=ProjectTask,CostCode`, { headers: auth });
+  const budgetData = await budgetRes.json();
+  const budgetRow = budgetData.value.find(r => r.ProjectTask.trim() === task && r.CostCode.trim() === costCode);
+
+  const charCodes = (s) => [...s].map(c => c.charCodeAt(0));
 
   res.json({
-    targetKey: targetBudgetKey,
-    budgetKeyExists: budgetKeys.includes(targetBudgetKey),
-    matchingTxRows: targetTxRows,
-    totalTxRowsInPeriod: txRows.length,
+    budgetRaw:    budgetRow ? { task: budgetRow.ProjectTask, costCode: budgetRow.CostCode } : null,
+    budgetChars:  budgetRow ? { task: charCodes(budgetRow.ProjectTask), costCode: charCodes(budgetRow.CostCode) } : null,
+    txRawSample:  rawMatches[0] ? { task: rawMatches[0].ProjectTask, costCode: rawMatches[0].CostCode } : null,
+    txChars:      rawMatches[0] ? { task: charCodes(rawMatches[0].ProjectTask), costCode: charCodes(rawMatches[0].CostCode) } : null,
+    rawMatchCount: rawMatches.length,
   });
 });
 
