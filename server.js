@@ -85,7 +85,7 @@ app.get('/snapshot/costlines', async (req, res) => {
         existing.pendingBudget  += potential;
       } else {
         budgetMap.set(key, {
-          task:           row.ProjectTask,
+          task:           row.ProjectTask.trim(),
           costCode:       row.CostCode.trim(),
           description:    row.Description,
           originalBudget: original,
