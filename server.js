@@ -66,7 +66,7 @@ const rows = txData.value.map(r => ({
   const dropped         = rows.filter(r => !r.kept);
   const kept            = rows.filter(r => r.kept);
   const l1510           = rows.filter(r => r.costCode === 'L1510' && r.task === 'GC');
-  const uniqueProjects  = [...new Set(txData.value.map(r => r.Project))];
+  const uniqueProjects  = [...new Set(txData.value.map(r => r.ProjectID))];
   const uniqueCostCodes = [...new Set(txData.value.map(r => r.CostCode.trim()))].sort();
 
   res.json({
