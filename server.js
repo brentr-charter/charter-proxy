@@ -120,7 +120,8 @@ app.get('/snapshot/costlines', async (req, res) => {
     const periodMap  = new Map(); // key -> { period -> amount }
 
     for (const row of txData.value) {
-      if (row.FinPeriod > finPeriod) continue; // skip future periods
+      const toYYYYMM = (mmyyyy) => mmyyyy.slice(2) + mmyyyy.slice(0, 2);
+      if (toYYYYMM(row.FinPeriod) > toYYYYMM(finPeriod)) continue; // skip future periods
   
       const key    = `${row.ProjectTask.trim()}|${row.CostCode.trim()}`;
       const amount = parseFloat(row.Amount) || 0;
