@@ -145,21 +145,17 @@ app.get('/snapshot/costlines', async (req, res) => {
     const periodMap  = new Map(); // key -> { period -> amount }
 
     for (const row of txData.value) {
-      const toYYYYMM = (mmyyyy) => mmyyyy.slice(2) + mmyyyy.slice(0, 2);
-      if (toYYYYMM(row.FinPeriod) > toYYYYMM(finPeriod)) continue; // skip future periods
+  const toYYYYMM = (mmyyyy) => mmyyyy.slice(2) + mmyyyy.slice(0, 2);
+
+  if (row.CostCode.trim() === 'L1510' && row.ProjectTask.trim() === 'GC') {
+    console.log('L1510 raw:', row.FinPeriod, toYYYYMM(row.FinPeriod), 'vs', finPeriod, toYYYYMM(finPeriod));
+  }
+
+  if (toYYYYMM(row.FinPeriod) > toYYYYMM(finPeriod)) continue;; // skip future periods
   
       const key    = `${row.ProjectTask.trim()}|${row.CostCode.trim()}`;
       const amount = parseFloat(row.Amount) || 0;
       const fp     = row.FinPeriod; // MMYYYY
-
-      if (row.CostCode.trim() === 'L1510' && row.ProjectTask.trim() === 'GC') {
-  console.log('MATCH:', row.FinPeriod, row.Amount);
-}
-      // temporary log add
-      if (row.CostCode.trim() === 'L1510') {
-  console.log('L1510 row:', JSON.stringify({ key, amount, fp: row.FinPeriod }));
-}
-// end of temporary log add
       
       // Actual
       actualMap.set(key, (actualMap.get(key) || 0) + amount);
