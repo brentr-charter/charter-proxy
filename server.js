@@ -67,13 +67,16 @@ app.get('/debug/transactions', async (req, res) => {
   const kept    = rows.filter(r => r.kept);
   const l1510   = rows.filter(r => r.costCode === 'L1510' && r.task === 'GC');
 
-  res.json({
-    totalRows:    rows.length,
-    keptRows:     kept.length,
-    droppedRows:  dropped.length,
-    l1510GcRows:  l1510,
-    droppedSample: dropped.slice(0, 3),
-  });
+  const uniqueProjects = [...new Set(txData.value.map(r => r.Project))];
+  const uniqueCostCodes = [...new Set(txData.value.map(r => r.CostCode.trim()))].sort();
+
+res.json({
+  totalRows,
+  keptRows: kept.length,
+  droppedRows: dropped.length,
+  l1510GcRows: l1510,
+  uniqueProjects,
+  uniqueCostCodes,});
 });
 
 app.get('/debug/join', async (req, res) => {
