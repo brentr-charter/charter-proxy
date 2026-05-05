@@ -103,7 +103,7 @@ app.get('/snapshot/costlines', async (req, res) => {
     // ── 2. Fetch Transactions (actual + history) ───────────────────────
     const txRes = await fetch(
       `${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry` +
-      `?$filter=Project eq '${projectId}' and (AccountGroup eq 'LAB' or AccountGroup eq 'NONLAB')` +
+      `?$filter=Project eq '${projectId}'` +
       `&$select=ProjectTask,CostCode,Amount,FinPeriod`,
       {
   headers: {
