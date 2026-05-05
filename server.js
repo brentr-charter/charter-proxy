@@ -173,6 +173,10 @@ app.get('/snapshot/costlines', async (req, res) => {
       const actual   = actualMap.get(key) || 0;
       const buckets  = periodMap.get(key) || new Map();
 
+      if (row.CostCode.trim() === 'L1510' && row.ProjectTask.trim() === 'GC') {
+  console.log('MATCH:', row.FinPeriod, row.Amount);
+}
+
       // Sort periods descending, take 3 most recent, then reverse to oldest-first
       const history = [...buckets.entries()]
         .sort((a, b) => b[0].localeCompare(a[0]))
