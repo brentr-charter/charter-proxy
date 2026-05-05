@@ -42,6 +42,138 @@ app.get('/odata/:giName', async (req, res) => {
   }
 });
 
+app.get('/snapshot/costlines', async (req, res) => {
+  const { projectId, period } = req.query;
+  const user = req.headers['x-acumatica-user'];
+  const pass = req.headers['x-acumatica-pass'];
+
+  if (!projectId || !period) {
+    return res.status(400).json({ error: 'projectId and period are required' });
+  }
+
+  // Convert MM-YYYY to MMYYYY for FinPeriod filter
+  const finPeriod = period.replace('-', '');
+  const authHeaders = { 'x-acumatica-user': user, 'x-acumatica-pass': pass };
+
+  try {
+    // ── 1. Fetch PMBudget (budget fields) ──────────────────────────────
+    const budgetRes = await fetch(
+      `${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/PMBudget` +
+      `?$filter=ProjectID eq '${projectId}'` +
+      `&$select=ProjectTask,CostCode,Description,OriginalBudgetedAmount,RevisedBudgetedAmount,PotentialRevisedAmount`,
+      {
+  headers: {
+    'Authorization': `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`,
+    'Accept': 'application/json'
+  }
+}
+    );
+    if (!budgetRes.ok) throw new Error(`PMBudget failed: ${budgetRes.status}`);
+    const budgetData = await budgetRes.json();
+
+    // Group and sum by Task|CostCode
+    const budgetMap = new Map();
+    for (const row of budgetData.value) {
+      const key = `${row.ProjectTask}|${row.CostCode}`;
+      const existing = budgetMap.get(key);
+      const original  = parseFloat(row.OriginalBudgetedAmount)  || 0;
+      const revised   = parseFloat(row.RevisedBudgetedAmount)   || 0;
+      const potential = parseFloat(row.PotentialRevisedAmount)  || 0;
+      if (existing) {
+        existing.originalBudget += original;
+        existing.revisedBudget  += revised;
+        existing.pendingBudget  += potential;
+      } else {
+        budgetMap.set(key, {
+          task:           row.ProjectTask,
+          costCode:       row.CostCode,
+          description:    row.Description,
+          originalBudget: original,
+          revisedBudget:  revised,
+          pendingBudget:  potential,
+        });
+      }
+    }
+
+    // Fallback: if pendingBudget summed to 0, use revisedBudget
+    for (const [, line] of budgetMap) {
+      if (line.pendingBudget === 0) line.pendingBudget = line.revisedBudget;
+    }
+
+    // ── 2. Fetch Transactions (actual + history) ───────────────────────
+    const txRes = await fetch(
+      `${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry` +
+      `?$filter=Project eq '${projectId}' and FinPeriod le '${finPeriod}'` +
+      `&$select=ProjectTask,CostCode,Amount,FinPeriod`,
+      {
+  headers: {
+    'Authorization': `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`,
+    'Accept': 'application/json'
+  }
+}
+    );
+    if (!txRes.ok) throw new Error(`Transactions failed: ${txRes.status}`);
+    const txData = await txRes.json();
+
+    // Sum by Task|CostCode for actual, and by Task|CostCode|FinPeriod for history
+    const actualMap  = new Map(); // key -> total actual
+    const periodMap  = new Map(); // key -> { period -> amount }
+
+    for (const row of txData.value) {
+      const key    = `${row.ProjectTask}|${row.CostCode}`;
+      const amount = parseFloat(row.Amount) || 0;
+      const fp     = row.FinPeriod; // MMYYYY
+
+      // Actual
+      actualMap.set(key, (actualMap.get(key) || 0) + amount);
+
+      // Period buckets
+      if (!periodMap.has(key)) periodMap.set(key, new Map());
+      const buckets = periodMap.get(key);
+      buckets.set(fp, (buckets.get(fp) || 0) + amount);
+    }
+
+    // ── 3. Join and build costLines ────────────────────────────────────
+    const costLines = [];
+    for (const [key, budget] of budgetMap) {
+      const actual   = actualMap.get(key) || 0;
+      const buckets  = periodMap.get(key) || new Map();
+
+      // Sort periods descending, take 3 most recent, then reverse to oldest-first
+      const history = [...buckets.entries()]
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .slice(0, 3)
+        .reverse()
+        .map(([fp, spent]) => ({
+          period: fp.slice(0, 2) + '-' + fp.slice(2), // MMYYYY -> MM-YYYY
+          spent:  Math.round(spent),
+        }));
+
+      costLines.push({
+        id:             `${projectId}|${budget.task}|${budget.costCode}`,
+        task:           budget.task,
+        costCode:       budget.costCode,
+        description:    budget.description,
+        originalBudget: Math.round(budget.originalBudget),
+        revisedBudget:  Math.round(budget.revisedBudget),
+        pendingBudget:  Math.round(budget.pendingBudget),
+        actual:         Math.round(actual),
+        history,
+      });
+    }
+
+    // Filter out all-zero lines
+    const filtered = costLines.filter(l =>
+      l.originalBudget || l.revisedBudget || l.pendingBudget || l.actual
+    );
+
+    res.json({ costLines: filtered });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Dropbox: save projection file ─────────────────────────────────────────────
 // POST /projections/save
 // Body: { filename: "26-6590_projection_04-2026.json", content: { ...snapshot } }
