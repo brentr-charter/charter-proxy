@@ -164,46 +164,42 @@ app.get('/snapshot/costlines', async (req, res) => {
     }
 
     // ── 2. Fetch Transactions (actual + history) ───────────────────────
-    const txRes = await fetch(
-      `${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry` +
-      `?$filter=ProjectID eq '${projectId}'` +
-      `&$select=ProjectID,ProjectTask,CostCode,Amount,FinPeriod`,
-      {
-  headers: {
-    'Authorization': `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`,
-    'Accept': 'application/json'
+const actualMap = new Map();
+const periodMap = new Map();
+const toYYYYMM  = (s) => s.slice(2) + s.slice(0, 2);
+
+const uniqueCostCodes = [...new Set([...budgetMap.keys()].map(k => k.split('|')[1]))];
+
+for (const cc of uniqueCostCodes) {
+  const txRes = await fetch(
+    `${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry` +
+    `?$filter=Project eq '${projectId} ' and CostCode eq '${cc} '` +
+    `&$top=10000` +
+    `&$select=ProjectTask,CostCode,Amount,FinPeriod`,
+    {
+      headers: {
+        'Authorization': 'Basic ' + Buffer.from(user + ':' + pass).toString('base64'),
+        'Accept': 'application/json'
+      }
+    }
+  );
+  if (!txRes.ok) continue;
+  const txData = await txRes.json();
+  
+  for (const row of (txData.value ?? [])) {
+    if (toYYYYMM(row.FinPeriod) > toYYYYMM(finPeriod)) continue;
+    if (row.AccountGroup?.trim() === 'REV') continue;
+
+    const key    = `${row.ProjectTask.trim()}|${row.CostCode.trim()}`;
+    const amount = parseFloat(row.Amount) || 0;
+    const fp     = row.FinPeriod;
+
+    actualMap.set(key, (actualMap.get(key) || 0) + amount);
+
+    if (!periodMap.has(key)) periodMap.set(key, new Map());
+    periodMap.get(key).set(fp, (periodMap.get(key).get(fp) || 0) + amount);
   }
 }
-    );
-    if (!txRes.ok) throw new Error(`Transactions failed: ${txRes.status}`);
-    const txData = await txRes.json();
-
-    // Sum by Task|CostCode for actual, and by Task|CostCode|FinPeriod for history
-    const actualMap  = new Map(); // key -> total actual
-    const periodMap  = new Map(); // key -> { period -> amount }
-
-    for (const row of txData.value) {
-  const toYYYYMM = (mmyyyy) => mmyyyy.slice(2) + mmyyyy.slice(0, 2);
-
-  if (row.CostCode.trim() === 'L1510' && row.ProjectTask.trim() === 'GC') {
-    console.log('L1510 raw:', row.FinPeriod, toYYYYMM(row.FinPeriod), 'vs', finPeriod, toYYYYMM(finPeriod));
-  }
-
-  if (toYYYYMM(row.FinPeriod) > toYYYYMM(finPeriod)) continue;; // skip future periods
-  
-      const key    = `${row.ProjectTask.trim()}|${row.CostCode.trim()}`;
-      const amount = parseFloat(row.Amount) || 0;
-      const fp     = row.FinPeriod; // MMYYYY
-      
-      // Actual
-      actualMap.set(key, (actualMap.get(key) || 0) + amount);
-
-      // Period buckets
-      if (!periodMap.has(key)) periodMap.set(key, new Map());
-      const buckets = periodMap.get(key);
-      buckets.set(fp, (buckets.get(fp) || 0) + amount);
-    }
-
     // ── 3. Join and build costLines ────────────────────────────────────
     const costLines = [];
     for (const [key, budget] of budgetMap) {
