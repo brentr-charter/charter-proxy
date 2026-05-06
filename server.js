@@ -170,25 +170,28 @@ const toYYYYMM  = (s) => s.slice(2) + s.slice(0, 2);
 
 const uniqueCostCodes = [...new Set([...budgetMap.keys()].map(k => k.split('|')[1]))];
 
-for (const cc of uniqueCostCodes) {
-  const txRes = await fetch(
-    `${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry` +
-    `?$filter=Project eq '${projectId} ' and CostCode eq '${cc} '` +
-    `&$top=10000` +
-    `&$select=ProjectTask,CostCode,Amount,FinPeriod`,
-    {
-      headers: {
-        'Authorization': 'Basic ' + Buffer.from(user + ':' + pass).toString('base64'),
-        'Accept': 'application/json'
-      }
-    }
-  );
-  if (!txRes.ok) continue;
-  const txData = await txRes.json();
-  
+const authHeader = { 
+  'Authorization': 'Basic ' + Buffer.from(user + ':' + pass).toString('base64'), 
+  'Accept': 'application/json' 
+};
+
+const txResults = await Promise.all(
+  uniqueCostCodes.map(cc =>
+    fetch(
+      `${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry` +
+      `?$filter=Project eq '${projectId} ' and CostCode eq '${cc} '` +
+      `&$top=10000` +
+      `&$select=ProjectTask,CostCode,Amount,FinPeriod`,
+      { headers: authHeader }
+    )
+    .then(r => r.ok ? r.json() : { value: [] })
+    .catch(() => ({ value: [] }))
+  )
+);
+
+for (const txData of txResults) {
   for (const row of (txData.value ?? [])) {
     if (toYYYYMM(row.FinPeriod) > toYYYYMM(finPeriod)) continue;
-    if (row.AccountGroup?.trim() === 'REV') continue;
 
     const key    = `${row.ProjectTask.trim()}|${row.CostCode.trim()}`;
     const amount = parseFloat(row.Amount) || 0;
