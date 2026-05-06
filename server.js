@@ -163,23 +163,27 @@ app.get('/snapshot/costlines', async (req, res) => {
       if (line.pendingBudget === 0) line.pendingBudget = line.revisedBudget;
     }
 
-    // ── 2. Fetch Transactions (actual + history) ───────────────────────
+// ── 2. Fetch Transactions (actual + history) ───────────────────────
 const actualMap = new Map();
 const periodMap = new Map();
 const toYYYYMM  = (s) => s.slice(2) + s.slice(0, 2);
 
-const uniqueCostCodes = [...new Set([...budgetMap.keys()].map(k => k.split('|')[1]))];
-
-const authHeader = { 
-  'Authorization': 'Basic ' + Buffer.from(user + ':' + pass).toString('base64'), 
-  'Accept': 'application/json' 
+const authHeader = {
+  'Authorization': 'Basic ' + Buffer.from(user + ':' + pass).toString('base64'),
+  'Accept': 'application/json'
 };
 
+const txFilters = [
+  `Project eq '${projectId} ' and startswith(CostCode,'L') eq true`,
+  `Project eq '${projectId} ' and startswith(CostCode,'M') eq true`,
+  `Project eq '${projectId} ' and startswith(CostCode,'L') eq false and startswith(CostCode,'M') eq false`,
+];
+
 const txResults = await Promise.all(
-  uniqueCostCodes.map(cc =>
+  txFilters.map(filter =>
     fetch(
       `${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry` +
-      `?$filter=Project eq '${projectId} ' and CostCode eq '${cc} '` +
+      `?$filter=${encodeURIComponent(filter)}` +
       `&$top=10000` +
       `&$select=ProjectTask,CostCode,Amount,FinPeriod`,
       { headers: authHeader }
