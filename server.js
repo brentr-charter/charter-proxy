@@ -353,5 +353,24 @@ app.get('/projections/load', async (req, res) => {
   }
 });
 
+app.get('/dropbox/test', async (req, res) => {
+  try {
+    const token = await getDropboxToken();
+    const r = await fetch('https://api.dropbox.com/2/users/get_current_account', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    const data = await r.json();
+    res.json({
+      usingRefreshFlow: !!(DROPBOX_REFRESH_TOKEN && DROPBOX_APP_KEY && DROPBOX_APP_SECRET),
+      tokenAcquired: !!token,
+      dropboxStatus: r.status,
+      dropboxResponse: data,
+    });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
 const port = PORT || 3001;
 app.listen(port, () => console.log(`Proxy running on port ${port}`));
