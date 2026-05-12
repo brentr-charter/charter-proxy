@@ -9,8 +9,41 @@ app.use(express.json({ limit: '10mb' }));
 const allowedOrigin = process.env.ALLOWED_ORIGIN;
 app.use(cors({ origin: allowedOrigin }));
 
-const { ACUMATICA_BASE_URL, ACUMATICA_TENANT, DROPBOX_TOKEN, DROPBOX_FOLDER, PORT } = process.env;
+const { ACUMATICA_BASE_URL, ACUMATICA_TENANT, DROPBOX_TOKEN, DROPBOX_FOLDER,
+        DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY, DROPBOX_APP_SECRET, PORT } = process.env;
 const DROPBOX_SAVE_FOLDER = (DROPBOX_FOLDER || '/Cost Projections').replace(/\/$/, '');
+
+// ── Dropbox token management ──────────────────────────────────────────────────
+// If DROPBOX_REFRESH_TOKEN + DROPBOX_APP_KEY + DROPBOX_APP_SECRET are set,
+// the proxy auto-refreshes the access token when it expires.
+// Falls back to static DROPBOX_TOKEN for backwards compatibility.
+let _tokenCache = { token: DROPBOX_TOKEN || '', expiresAt: 0 };
+
+async function getDropboxToken() {
+  if (DROPBOX_REFRESH_TOKEN && DROPBOX_APP_KEY && DROPBOX_APP_SECRET) {
+    // Refresh if expired or within 5 minutes of expiry
+    if (!_tokenCache.token || Date.now() > _tokenCache.expiresAt - 300_000) {
+      const res = await fetch('https://api.dropbox.com/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type:    'refresh_token',
+          refresh_token: F-dZHFAdVxEAAAAAAAAAAWCUCBoRnVmf8msJsRdJZdQzEza8ZmCGmcE--7p1IdKY,
+          client_id:     p6kfa80urzbz55x,
+          client_secret: llt0zb9rkqduqqd,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.access_token) {
+        throw new Error(`Dropbox token refresh failed: ${data.error_description || res.status}`);
+      }
+      _tokenCache = { token: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 };
+    }
+    return _tokenCache.token;
+  }
+  // Fallback: static token (will eventually expire)
+  return DROPBOX_TOKEN || '';
+}
 
 // ── Acumatica OData passthrough ───────────────────────────────────────────────
 app.get('/odata/:giName', async (req, res) => {
@@ -253,12 +286,12 @@ app.post('/projections/save', async (req, res) => {
   if (!filename || !content) {
     return res.status(400).json({ error: 'Missing filename or content' });
   }
-
   try {
+    const token = await getDropboxToken();
     const response = await fetch('https://content.dropboxapi.com/2/files/upload', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${DROPBOX_TOKEN}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/octet-stream',
         'Dropbox-API-Arg': JSON.stringify({
           path: `${DROPBOX_SAVE_FOLDER}/${filename}`,
@@ -270,6 +303,7 @@ app.post('/projections/save', async (req, res) => {
       body: JSON.stringify(content, null, 2)
     });
     const data = await response.json();
+    if (!response.ok) return res.status(response.status).json(data);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -280,13 +314,14 @@ app.post('/projections/save', async (req, res) => {
 // GET /projections/list
 app.get('/projections/list', async (req, res) => {
   try {
+    const token = await getDropboxToken();
     const response = await fetch('https://api.dropboxapi.com/2/files/list_folder', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${DROPBOX_TOKEN}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ path: '', recursive: false })
+      body: JSON.stringify({ path: DROPBOX_SAVE_FOLDER, recursive: false })
     });
     const data = await response.json();
     res.json(data);
@@ -302,13 +337,13 @@ app.get('/projections/load', async (req, res) => {
   if (!filename) {
     return res.status(400).json({ error: 'Missing filename' });
   }
-
   try {
+    const token = await getDropboxToken();
     const response = await fetch('https://content.dropboxapi.com/2/files/download', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${DROPBOX_TOKEN}`,
-        'Dropbox-API-Arg': JSON.stringify({ path: `/${filename}` })
+        'Authorization': `Bearer ${token}`,
+        'Dropbox-API-Arg': JSON.stringify({ path: `${DROPBOX_SAVE_FOLDER}/${filename}` })
       }
     });
     const text = await response.text();
