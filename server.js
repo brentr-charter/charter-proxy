@@ -28,9 +28,9 @@ async function getDropboxToken() {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           grant_type:    'refresh_token',
-          refresh_token: 'F-dZHFAdVxEAAAAAAAAAAWCUCBoRnVmf8msJsRdJZdQzEza8ZmCGmcE--7p1IdKY',
-          client_id:     'p6kfa80urzbz55x',
-          client_secret: 'llt0zb9rkqduqqd',
+          refresh_token: DROPBOX_REFRESH_TOKEN,
+          client_id:     DROPBOX_APP_KEY,
+          client_secret: DROPBOX_APP_SECRET,
         }),
       });
       const data = await res.json();
