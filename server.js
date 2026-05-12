@@ -4,12 +4,13 @@ const fetch = require('node-fetch');
 const cors = require('cors');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 const allowedOrigin = process.env.ALLOWED_ORIGIN;
 app.use(cors({ origin: allowedOrigin }));
 
-const { ACUMATICA_BASE_URL, ACUMATICA_TENANT, DROPBOX_TOKEN, PORT } = process.env;
+const { ACUMATICA_BASE_URL, ACUMATICA_TENANT, DROPBOX_TOKEN, DROPBOX_FOLDER, PORT } = process.env;
+const DROPBOX_SAVE_FOLDER = (DROPBOX_FOLDER || '/Cost Projections').replace(/\/$/, '');
 
 // ── Acumatica OData passthrough ───────────────────────────────────────────────
 app.get('/odata/:giName', async (req, res) => {
@@ -260,7 +261,7 @@ app.post('/projections/save', async (req, res) => {
         'Authorization': `Bearer ${DROPBOX_TOKEN}`,
         'Content-Type': 'application/octet-stream',
         'Dropbox-API-Arg': JSON.stringify({
-          path: `/${filename}`,
+          path: `${DROPBOX_SAVE_FOLDER}/${filename}`,
           mode: 'overwrite',
           autorename: false,
           mute: false
