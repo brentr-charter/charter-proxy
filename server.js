@@ -198,45 +198,49 @@ app.get('/snapshot/costlines', async (req, res) => {
     }
 
     // ── 2. Fetch Transactions (actual + history) ───────────────────────
-const actualMap = new Map();
-const periodMap = new Map();
-const toYYYYMM  = (s) => s.slice(2) + s.slice(0, 2);
+    // Single fetch to PM-Cost Detail GI — one call for the whole project,
+    // paginated in case row count exceeds PAGE_SIZE.
+    const actualMap = new Map();
+    const periodMap = new Map();
+    const toYYYYMM  = (s) => s.slice(2) + s.slice(0, 2);
 
-const uniqueCostCodes = [...new Set([...budgetMap.keys()].map(k => k.split('|')[1]))];
+    const authHeader = {
+      'Authorization': 'Basic ' + Buffer.from(`${user}:${pass}`).toString('base64'),
+      'Accept': 'application/json'
+    };
 
-const authHeader = { 
-  'Authorization': 'Basic ' + Buffer.from(user + ':' + pass).toString('base64'), 
-  'Accept': 'application/json' 
-};
+    const PAGE_SIZE = 5000;
+    let allTxRows   = [];
+    let skip        = 0;
 
-const txResults = await Promise.all(
-  uniqueCostCodes.map(cc =>
-    fetch(
-      `${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/Project%20Transactions%20Inquiry` +
-      `?$filter=Project eq '${projectId} ' and CostCode eq '${cc} '` +
-      `&$top=10000` +
-      `&$select=ProjectTask,CostCode,Amount,FinPeriod`,
-      { headers: authHeader }
-    )
-    .then(r => r.ok ? r.json() : { value: [] })
-    .catch(() => ({ value: [] }))
-  )
-);
+    while (true) {
+      const txRes = await fetch(
+        `${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/PM-Cost%20Detail` +
+        `?$filter=ProjectID eq '${projectId}'` +
+        `&$select=ProjectTask,CostCode,FinPeriod,PMTran_amount` +
+        `&$top=${PAGE_SIZE}&$skip=${skip}`,
+        { headers: authHeader }
+      );
+      if (!txRes.ok) throw new Error(`PM-Cost Detail fetch failed: ${txRes.status}`);
+      const txData = await txRes.json();
+      const rows   = txData.value ?? [];
+      allTxRows    = allTxRows.concat(rows);
+      if (rows.length < PAGE_SIZE) break;
+      skip += PAGE_SIZE;
+    }
 
-for (const txData of txResults) {
-  for (const row of (txData.value ?? [])) {
-    if (toYYYYMM(row.FinPeriod) > toYYYYMM(finPeriod)) continue;
+    for (const row of allTxRows) {
+      if (toYYYYMM(row.FinPeriod) > toYYYYMM(finPeriod)) continue;
 
-    const key    = `${row.ProjectTask.trim()}|${row.CostCode.trim()}`;
-    const amount = parseFloat(row.Amount) || 0;
-    const fp     = row.FinPeriod;
+      const key    = `${row.ProjectTask.trim()}|${row.CostCode.trim()}`;
+      const amount = parseFloat(row.PMTran_amount) || 0;
+      const fp     = row.FinPeriod;
 
-    actualMap.set(key, (actualMap.get(key) || 0) + amount);
+      actualMap.set(key, (actualMap.get(key) || 0) + amount);
 
-    if (!periodMap.has(key)) periodMap.set(key, new Map());
-    periodMap.get(key).set(fp, (periodMap.get(key).get(fp) || 0) + amount);
-  }
-}
+      if (!periodMap.has(key)) periodMap.set(key, new Map());
+      periodMap.get(key).set(fp, (periodMap.get(key).get(fp) || 0) + amount);
+    }
     // ── 3. Join and build costLines ────────────────────────────────────
     const costLines = [];
     for (const [key, budget] of budgetMap) {
