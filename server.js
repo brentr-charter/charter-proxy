@@ -217,7 +217,6 @@ app.get('/snapshot/costlines', async (req, res) => {
       const txRes = await fetch(
         `${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/PM-Cost%20Detail` +
         `?$filter=ProjectID eq '${projectId}'` +
-        `&$select=ProjectTask,CostCode,FinPeriod,PMTran_amount` +
         `&$top=${PAGE_SIZE}&$skip=${skip}`,
         { headers: authHeader }
       );
@@ -249,7 +248,7 @@ app.get('/snapshot/costlines', async (req, res) => {
 
       // Sort periods descending, take 3 most recent, then reverse to oldest-first
       const history = [...buckets.entries()]
-        .sort((a, b) => b[0].localeCompare(a[0]))
+        .sort((a, b) => toYYYYMM(b[0]).localeCompare(toYYYYMM(a[0])))
         .slice(0, 3)
         .reverse()
         .map(([fp, spent]) => ({
