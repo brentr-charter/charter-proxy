@@ -263,7 +263,7 @@ for (const txData of txResults) {
 
       // Sort periods descending, take 3 most recent, then reverse to oldest-first
       const history = [...buckets.entries()]
-        .sort((a, b) => b[0].localeCompare(a[0]))
+        .sort((a, b) => toYYYYMM(b[0]).localeCompare(toYYYYMM(a[0])))
         .slice(0, 3)
         .reverse()
         .map(([fp, spent]) => ({
