@@ -215,7 +215,7 @@ const txResults = await Promise.all(
       `${ACUMATICA_BASE_URL}/odata/${ACUMATICA_TENANT}/PM-Cost%20Detail` +
       `?$filter=Project eq '${projectId} ' and CostCode eq '${cc} '` +
       `&$top=10000` +
-      `&$select=ProjectTask,CostCode,PMTran_amount,FinPeriod,AccountGroup,Quantity,UOM,Date,AccountName`,
+      `&$select=ProjectTask,CostCode,PMTran_amount,FinPeriod,AccountGroup,Quantity,UOM,Date,AccountName,Description`,
       { headers: authHeader }
     )
     .then(r => r.ok ? r.json() : { value: [] })
@@ -247,6 +247,7 @@ for (const txData of txResults) {
         date:         row.Date ? row.Date.split('T')[0] : null,
         accountGroup: ag,
         vendor:       row.AccountName ? row.AccountName.trim() : null,
+        description:  row.Description  ? row.Description.trim()  : null,
         amount,
         qty:          parseFloat(row.Quantity) || 0,
         uom:          (row.UOM || '').trim(),
